@@ -301,21 +301,26 @@ public class Log {
 
     public static void forest(String s) {
         countModuleLog();
+        // 同时写入 runtime 日志，方便在"查看运行日志"中看到森林所有步骤
+        runtimeWrite("[FOREST] " + s);
         writeModuleLog(s, io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableForestLog(), forestLogger);
     }
 
     public static void goldenBeans(String s) {
         countModuleLog();
+        runtimeWrite("[GOLDENBEANS] " + s);
         writeModuleLog(s, io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableGoldenBeansLog(), goldenBeansLogger);
     }
 
     public static void farm(String s) {
         countModuleLog();
+        runtimeWrite("[FARM] " + s);
         writeModuleLog(s, io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableFarmLog(), farmLogger);
     }
 
     public static void other(String s) {
         countModuleLog();
+        runtimeWrite("[OTHER] " + s);
         writeModuleLog(s, io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableOtherLog(), otherLogger);
     }
 
