@@ -177,11 +177,16 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
     }
 
     // 计算可见条目:根据搜索文本和 tag 过滤
+    val moduleTags = listOf("FOREST", "FARM", "GOLDENBEANS", "OTHER")
     val filteredEntries = entries.filter { e ->
         val matchSearch = searchQuery.isBlank() ||
                 (e.tag?.contains(searchQuery, ignoreCase = true) == true) ||
                 e.body.contains(searchQuery, ignoreCase = true)
-        val matchTag = selectedTag == null || e.tag == selectedTag
+        val matchTag = when (selectedTag) {
+            null -> true                           // 全部：不过滤
+            "ALL_MODULES" -> e.tag in moduleTags   // 模块日志：只显示森林/庄园/金豆/其他
+            else -> e.tag == selectedTag           // 指定 tag
+        }
         matchSearch && matchTag
     }
 
@@ -268,6 +273,9 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
             // ── Runtime tag 过滤条 ──────────────────────────────────────
             if (logType == LogType.RUNTIME && tagCounts.isNotEmpty()) {
                 val tags = tagCounts.keys.sorted()
+                // 模块 tag 列表
+                val moduleTags = listOf("FOREST", "FARM", "GOLDENBEANS", "OTHER")
+                val moduleTagCount = tags.count { it in moduleTags }
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -276,6 +284,13 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
                         .padding(bottom = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    // 模块日志 Chip：只显示森林/庄园/金豆/其他模块日志，不含系统运行日志
+                    TagChip(
+                        label = "🔍 模块日志",
+                        count = moduleTagCount,
+                        selected = selectedTag == "ALL_MODULES",
+                        onClick = { selectedTag = if (selectedTag == "ALL_MODULES") null else "ALL_MODULES" }
+                    )
                     // 全部 Chip
                     TagChip(
                         label = "全部",
