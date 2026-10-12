@@ -627,6 +627,15 @@ fun LogsTab(activity: MiuixMainActivity) {
 
     SmallTitle(text = "系统记录")
     CardColumn {
+        var runtime by remember { mutableStateOf(AppConfig.INSTANCE.enableViewRuntimeLog ?: true) }
+        LogSwitchRow("🔍 统一流程日志", runtime, summary = "查看任务执行到哪一步（全部模块）", onClick = { openLog(activity, LogType.RUNTIME) }) {
+            runtime = it
+            AppConfig.INSTANCE.enableViewRuntimeLog = it
+            AppConfig.save()
+            activity.broadcastReloadConfig()
+            if (!it) FileUtil.clearLog("runtime")
+        }
+        Spacer(Modifier.height(4.dp))
         var debug by remember { mutableStateOf(AppConfig.INSTANCE.enableDebugLog ?: false) }
         LogSwitchRow("抓包记录", debug, onClick = { openLog(activity, LogType.DEBUG) }) {
             debug = it
@@ -643,14 +652,6 @@ fun LogsTab(activity: MiuixMainActivity) {
             activity.broadcastReloadConfig()
             if (!it) FileUtil.clearLog("error")
         }
-        var runtime by remember { mutableStateOf(AppConfig.INSTANCE.enableViewRuntimeLog ?: true) }
-        LogSwitchRow("查看运行日志", runtime, onClick = { openLog(activity, LogType.RUNTIME) }) {
-            runtime = it
-            AppConfig.INSTANCE.enableViewRuntimeLog = it
-            AppConfig.save()
-            activity.broadcastReloadConfig()
-            if (!it) FileUtil.clearLog("runtime")
-        }
     }
     Spacer(Modifier.height(16.dp))
 }
@@ -662,10 +663,11 @@ fun LogsTab(activity: MiuixMainActivity) {
  * 它没有 onClick 参数，所以外层再套一层可点区域实现"点整行"。
  */
 @Composable
-fun LogSwitchRow(title: String, checked: Boolean, onClick: () -> Unit, onCheckedChange: (Boolean) -> Unit) {
+fun LogSwitchRow(title: String, checked: Boolean, summary: String? = null, onClick: () -> Unit, onCheckedChange: (Boolean) -> Unit) {
     Box(Modifier.fillMaxWidth()) {
         SwitchPreference(
             title = title,
+            summary = summary,
             checked = checked,
             onCheckedChange = onCheckedChange,
             // 覆写库默认的 16dp 上下内边距，尽量贴近日志页原来的行距（左右仍是 16dp，与设置页一致）
