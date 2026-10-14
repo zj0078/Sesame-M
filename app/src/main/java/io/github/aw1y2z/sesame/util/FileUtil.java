@@ -907,6 +907,16 @@ public class FileUtil {
         }
         return false;
     }
+
+    public static Boolean clearFiles(java.util.List<File> files) {
+        boolean allSuccess = true;
+        for (File file : files) {
+            if (!clearFile(file)) {
+                allSuccess = false;
+            }
+        }
+        return allSuccess;
+    }
     
     /**
      * 清空某类日志：截断日志目录下该类别所有日期文件（保留文件本身，避免破坏已打开的句柄）
