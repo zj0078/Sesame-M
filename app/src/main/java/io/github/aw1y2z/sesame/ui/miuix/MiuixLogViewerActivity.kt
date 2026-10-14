@@ -92,6 +92,18 @@ enum class LogType(val displayName: String) {
             RUNTIME -> FileUtil.getRuntimeLogFile()
         }
 
+    /** 合并显示的多个日志文件(RUNTIME类型时使用) */
+    val mergedFiles: List<File>
+        get() = when (this) {
+            RUNTIME -> listOf(
+                FileUtil.getForestLogFile(),
+                FileUtil.getFarmLogFile(),
+                FileUtil.getGoldenBeansLogFile(),
+                FileUtil.getOtherLogFile()
+            )
+            else -> listOf(file)
+        }
+
     companion object {
         /** 一级页跳转时携带的 extra key,值为 LogType.name */
         const val EXTRA_LOG_TYPE = "sesame_log_type"
@@ -133,7 +145,7 @@ class MiuixLogViewerActivity : MiuixBaseActivity() {
 @Composable
 fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
     val context = LocalContext.current
-    var entries by remember(logType) { mutableStateOf(loadLogEntries(logType.file)) }
+    var entries by remember(logType) { mutableStateOf(loadLogEntries(logType.mergedFiles)) }
     var revision by remember(logType) { mutableStateOf(0) }
     var browsingHistory by remember(logType) { mutableStateOf(false) }
     // 搜索文本
@@ -152,19 +164,19 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
 
     // 定时刷新:文件无变化时只做一次轻量的 length/lastModified 比较,不读盘也不重组
     LaunchedEffect(logType) {
-        var stamp = logFileStamp(logType.file)
+        var stamp = logFilesStamp(logType.mergedFiles)
         while (true) {
             delay(LOG_REFRESH_INTERVAL_MS)
             if (!activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
                 continue
             }
-            val file = logType.file
-            val newStamp = logFileStamp(file)
+            val files = logType.mergedFiles
+            val newStamp = logFilesStamp(files)
             if (newStamp == null || newStamp == stamp) {
                 continue
             }
             stamp = newStamp
-            entries = withContext(Dispatchers.IO) { loadLogEntries(file) }
+            entries = withContext(Dispatchers.IO) { loadLogEntries(files) }
             revision++
         }
     }
@@ -204,8 +216,8 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
                     }
                 },
                 onClear = {
-                    if (FileUtil.clearFile(logType.file)) {
-                        entries = loadLogEntries(logType.file)
+                    if (FileUtil.clearFiles(logType.mergedFiles)) {
+                        entries = loadLogEntries(logType.mergedFiles)
                         searchQuery = ""
                         selectedTag = null
                         ToastUtil.show(context, "已清空")
@@ -526,12 +538,33 @@ private data class LogFileStamp(val length: Long, val modified: Long)
 private fun logFileStamp(file: File?): LogFileStamp? =
     if (file != null && file.exists()) LogFileStamp(file.length(), file.lastModified()) else null
 
+private fun logFilesStamp(files: List<File>): LogFileStamp? {
+    if (files.isEmpty()) return null
+    var totalLength = 0L
+    var maxModified = 0L
+    for (file in files) {
+        if (file.exists()) {
+            totalLength += file.length()
+            maxModified = maxOf(maxModified, file.lastModified())
+        }
+    }
+    return if (totalLength > 0L) LogFileStamp(totalLength, maxModified) else null
+}
+
 /**
  * 读取日志文件并按行解析为条目;无时间戳的行合并到上一条(多行日志聚合为同一卡片)。
  * 仅读取文件尾部,并限制最大条目数,保证大文件也能快速打开。
  */
 private fun loadLogEntries(file: File?): List<LogEntry> {
-    if (file == null || !file.exists()) {
+    return if (file != null) loadLogEntries(listOf(file)) else emptyList()
+}
+
+/**
+ * 读取多个日志文件并按时间合并排序;无时间戳的行合并到上一条(多行日志聚合为同一卡片)。
+ * 仅读取文件尾部,并限制最大条目数,保证大文件也能快速打开。
+ */
+private fun loadLogEntries(files: List<File>): List<LogEntry> {
+    if (files.isEmpty()) {
         return emptyList()
     }
     // 两种格式：
@@ -540,35 +573,38 @@ private fun loadLogEntries(file: File?): List<LogEntry> {
     val timeRegex = Regex("^(\\d{2}:\\d{2}:\\d{2}\\.\\d{3})\\s+(?:(\\w+):\\s*)?(.*)$")
     val entries = ArrayDeque<LogEntry>()
     return try {
-        val text = readTailText(file, MAX_TAIL_BYTES)
         var lineNumber = 0
-        for (line in text.lineSequence()) {
-            lineNumber++
-            val match = timeRegex.find(line)
-            if (match != null) {
-                entries.addLast(
-                    LogEntry(
-                        lineNumber = lineNumber,
-                        time = match.groupValues[1],
-                        tag = match.groupValues[2].takeIf { it.isNotEmpty() },
-                        body = match.groupValues[3]
+        for (file in files) {
+            if (!file.exists()) continue
+            val text = readTailText(file, MAX_TAIL_BYTES)
+            for (line in text.lineSequence()) {
+                lineNumber++
+                val match = timeRegex.find(line)
+                if (match != null) {
+                    entries.addLast(
+                        LogEntry(
+                            lineNumber = lineNumber,
+                            time = match.groupValues[1],
+                            tag = match.groupValues[2].takeIf { it.isNotEmpty() },
+                            body = match.groupValues[3]
+                        )
                     )
-                )
-            } else {
-                // 无时间戳:视为上一条的续行,合并到同卡片
-                if (entries.isNotEmpty()) {
-                    val last = entries.removeLast()
-                    entries.addLast(last.copy(body = last.body + "\n" + line))
                 } else {
-                    entries.addLast(LogEntry(lineNumber, null, null, line))
+                    // 无时间戳:视为上一条的续行,合并到同卡片
+                    if (entries.isNotEmpty()) {
+                        val last = entries.removeLast()
+                        entries.addLast(last.copy(body = last.body + "\n" + line))
+                    } else {
+                        entries.addLast(LogEntry(lineNumber, null, null, line))
+                    }
+                }
+                // 超出上限时丢弃最早的条目,保证内存占用可控
+                while (entries.size > MAX_LOG_ENTRIES) {
+                    entries.removeFirst()
                 }
             }
-            // 超出上限时丢弃最早的条目,保证内存占用可控
-            while (entries.size > MAX_LOG_ENTRIES) {
-                entries.removeFirst()
-            }
         }
-        entries.toList()
+        entries.toList().sortedBy { it.time }
     } catch (e: Throwable) {
         emptyList()
     }
