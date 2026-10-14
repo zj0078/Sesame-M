@@ -72,7 +72,6 @@ import java.io.File
  * 一级页点击哪个类目,二级页就只展示该类。
  */
 enum class LogType(val displayName: String) {
-    ALL("所有任务记录"),
     FOREST("森林记录"),
     GOLDENBEANS("金豆记录"),
     FARM("庄园记录"),
@@ -84,7 +83,6 @@ enum class LogType(val displayName: String) {
     /** 每次访问都重新取当日文件,避免跨天后路径过期 */
     val file: File
         get() = when (this) {
-            ALL -> FileUtil.getForestLogFile()
             FOREST -> FileUtil.getForestLogFile()
             GOLDENBEANS -> FileUtil.getGoldenBeansLogFile()
             FARM -> FileUtil.getFarmLogFile()
@@ -94,10 +92,10 @@ enum class LogType(val displayName: String) {
             RUNTIME -> FileUtil.getRuntimeLogFile()
         }
 
-    /** 合并显示的多个日志文件(ALL类型时使用) */
+    /** 合并显示的多个日志文件(RUNTIME类型时使用) */
     val mergedFiles: List<File>
         get() = when (this) {
-            ALL -> listOf(
+            RUNTIME -> listOf(
                 FileUtil.getForestLogFile(),
                 FileUtil.getFarmLogFile(),
                 FileUtil.getGoldenBeansLogFile(),
