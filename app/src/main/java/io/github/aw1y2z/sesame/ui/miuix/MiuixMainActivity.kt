@@ -590,6 +590,9 @@ fun LogsTab(activity: MiuixMainActivity) {
 
     SmallTitle(text = "分类记录")
     CardColumn {
+        LogSwitchRow("所有任务记录", true, onClick = { openLog(activity, LogType.ALL) }) {
+            // 所有任务记录始终开启，无需开关
+        }
         var forest by remember { mutableStateOf(AppConfig.INSTANCE.enableForestLog ?: true) }
         LogSwitchRow("森林记录", forest, onClick = { openLog(activity, LogType.FOREST) }) {
             forest = it
