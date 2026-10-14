@@ -145,7 +145,7 @@ class MiuixLogViewerActivity : MiuixBaseActivity() {
 @Composable
 fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
     val context = LocalContext.current
-    var entries by remember(logType) { mutableStateOf(loadLogEntries(logType.mergedFiles)) }
+    var entries by remember(logType) { mutableStateOf(loadLogEntries(logType.file)) }
     var revision by remember(logType) { mutableStateOf(0) }
     var browsingHistory by remember(logType) { mutableStateOf(false) }
     // 搜索文本
@@ -164,19 +164,19 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
 
     // 定时刷新:文件无变化时只做一次轻量的 length/lastModified 比较,不读盘也不重组
     LaunchedEffect(logType) {
-        var stamp = logFilesStamp(logType.mergedFiles)
+        var stamp = logFileStamp(logType.file)
         while (true) {
             delay(LOG_REFRESH_INTERVAL_MS)
             if (!activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
                 continue
             }
-            val files = logType.mergedFiles
-            val newStamp = logFilesStamp(files)
+            val file = logType.file
+            val newStamp = logFileStamp(file)
             if (newStamp == null || newStamp == stamp) {
                 continue
             }
             stamp = newStamp
-            entries = withContext(Dispatchers.IO) { loadLogEntries(files) }
+            entries = withContext(Dispatchers.IO) { loadLogEntries(file) }
             revision++
         }
     }
@@ -216,8 +216,8 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
                     }
                 },
                 onClear = {
-                    if (FileUtil.clearFiles(logType.mergedFiles)) {
-                        entries = loadLogEntries(logType.mergedFiles)
+                    if (FileUtil.clearFile(logType.file)) {
+                        entries = loadLogEntries(logType.file)
                         searchQuery = ""
                         selectedTag = null
                         ToastUtil.show(context, "已清空")
