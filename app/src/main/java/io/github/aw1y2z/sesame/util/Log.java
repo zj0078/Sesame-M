@@ -301,21 +301,33 @@ public class Log {
     public static void forest(String s) {
         countModuleLog();
         writeModuleLog(s, io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableForestLog(), forestLogger);
+        if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog()) {
+            runtimeLoggerOf("FOREST").i(withUser(s));
+        }
     }
 
     public static void goldenBeans(String s) {
         countModuleLog();
         writeModuleLog(s, io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableGoldenBeansLog(), goldenBeansLogger);
+        if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog()) {
+            runtimeLoggerOf("GOLDENBEANS").i(withUser(s));
+        }
     }
 
     public static void farm(String s) {
         countModuleLog();
         writeModuleLog(s, io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableFarmLog(), farmLogger);
+        if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog()) {
+            runtimeLoggerOf("FARM").i(withUser(s));
+        }
     }
 
     public static void other(String s) {
         countModuleLog();
         writeModuleLog(s, io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableOtherLog(), otherLogger);
+        if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog()) {
+            runtimeLoggerOf("OTHER").i(withUser(s));
+        }
     }
 
     /**
