@@ -124,7 +124,7 @@ public class Log {
                     .fileNameGenerator(new CustomDateFileNameGenerator("debug"))
                     .backupStrategy(new NeverBackupStrategy())
                     .cleanStrategy(new NeverCleanStrategy())
-                    .flattener(new PatternFlattener("{HH:mm:ss.SSS} {t}: {m}"))
+                    .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {t}: {m}"))
                     .build()).build();
 
     private static final Logger forestLogger = XLog.tag("FOREST").printers(
@@ -132,7 +132,7 @@ public class Log {
                     .fileNameGenerator(new CustomDateFileNameGenerator("forest"))
                     .backupStrategy(new NeverBackupStrategy())
                     .cleanStrategy(new NeverCleanStrategy())
-                    .flattener(new PatternFlattener("{HH:mm:ss.SSS} {t}: {m}"))
+                    .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {t}: {m}"))
                     .build()).build();
 
     private static final Logger goldenBeansLogger = XLog.tag("GOLDENBEANS").printers(
@@ -140,7 +140,7 @@ public class Log {
                     .fileNameGenerator(new CustomDateFileNameGenerator("goldenbeans"))
                     .backupStrategy(new NeverBackupStrategy())
                     .cleanStrategy(new NeverCleanStrategy())
-                    .flattener(new PatternFlattener("{HH:mm:ss.SSS} {t}: {m}"))
+                    .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {t}: {m}"))
                     .build()).build();
 
     private static final Logger farmLogger = XLog.tag("FARM").printers(
@@ -148,7 +148,7 @@ public class Log {
                     .fileNameGenerator(new CustomDateFileNameGenerator("farm"))
                     .backupStrategy(new NeverBackupStrategy())
                     .cleanStrategy(new NeverCleanStrategy())
-                    .flattener(new PatternFlattener("{HH:mm:ss.SSS} {t}: {m}"))
+                    .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {t}: {m}"))
                     .build()).build();
 
     private static final Logger otherLogger = XLog.tag("OTHER").printers(
@@ -156,7 +156,7 @@ public class Log {
                     .fileNameGenerator(new CustomDateFileNameGenerator("other"))
                     .backupStrategy(new NeverBackupStrategy())
                     .cleanStrategy(new NeverCleanStrategy())
-                    .flattener(new PatternFlattener("{HH:mm:ss.SSS} {t}: {m}"))
+                    .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {t}: {m}"))
                     .build()).build();
 
     private static final Logger errorLogger = XLog.tag("ERROR").printers(
@@ -164,7 +164,7 @@ public class Log {
                     .fileNameGenerator(new CustomDateFileNameGenerator("error"))
                     .backupStrategy(new NeverBackupStrategy())
                     .cleanStrategy(new NeverCleanStrategy())
-                    .flattener(new PatternFlattener("{HH:mm:ss.SSS} {t}: {m}"))
+                    .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {t}: {m}"))
                     .build()).build();
 
     /**
