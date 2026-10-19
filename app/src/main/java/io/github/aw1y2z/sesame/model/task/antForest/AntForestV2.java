@@ -191,6 +191,7 @@ public class AntForestV2 extends ModelTask {
     private SelectModelField dontCollectList;
 
     private BooleanModelField drawGameCenterAward;
+    private BooleanModelField teamPriority;
     private ChoiceModelField CollectSelfEnergyType;
 
     private IntegerModelField CollectSelfEnergyThreshold;
@@ -263,6 +264,7 @@ public class AntForestV2 extends ModelTask {
     private BooleanModelField youthPrivilege;
     private SelectModelField ecoLifeOptions;
     private BooleanModelField dress;
+    private BooleanModelField readForest;
     private TextModelField dressDetailList;
 
     private static int totalCollected = 0;
@@ -307,6 +309,7 @@ public class AntForestV2 extends ModelTask {
     public ModelFields getFields() {
         ModelFields modelFields = new ModelFields();
         modelFields.addField(collectEnergy = new BooleanModelField("collectEnergy", "收集能量", false));
+        modelFields.addField(teamPriority = new BooleanModelField("teamPriority", "组队收集能量优先", false));
         modelFields.addField(dontCollectList = new SelectModelField("dontCollectList", "不收取能量列表", new LinkedHashSet<>(), AlipayUser::getList));
         modelFields.addField(batchRobEnergy = new BooleanModelField("batchRobEnergy", "一键收取", false));
         modelFields.addField(CollectSelfEnergyType = new ChoiceModelField("CollectSelfEnergyType", "收单个能量球 | " + "方式", CollectSelfType.ALL, CollectSelfType.nickNames));
@@ -374,6 +377,7 @@ public class AntForestV2 extends ModelTask {
         modelFields.addField(greenLife = new BooleanModelField("greenLife", "森林集市", false));
         modelFields.addField(marketBrowseTask = new BooleanModelField("marketBrowseTask", "绿植浏览", false));
         modelFields.addField(greenRent = new BooleanModelField("greenRent", "绿色租赁", false));
+        modelFields.addField(readForest = new BooleanModelField("readForest", "无纸阅读", false));
         modelFields.addField(youthPrivilege = new BooleanModelField("youthPrivilege", "青春特权 | 森林道具", false));
         modelFields.addField(ecoLife = new BooleanModelField("ecoLife", "绿色行动 | 开启", false));
         modelFields.addField(ecoLifeOptions = new SelectModelField("ecoLifeOptions", "绿色行动 | 选项", new LinkedHashSet<>(), CustomOption::getEcoLifeOptions, "光盘行动需要先手动完成一次").setDependsOn("ecoLife"));
@@ -434,6 +438,8 @@ public class AntForestV2 extends ModelTask {
 
     @Override
     public void run() {
+        // 组队优先：本次运行是否由本方法切到组队模式（结束时需切回个人）
+        boolean prioritySwitchedToTeam = false;
         try {
             taskCount.set(0);
             selfId = UserIdMap.getCurrentUid();
@@ -441,6 +447,18 @@ public class AntForestV2 extends ModelTask {
 
             // 组队合种浇水异常中断后，把账号从组队模式恢复回个人模式
             fixTeamModeIfNeeded();
+
+            // 组队优先：主动切到组队模式，让 queryHomePage 返回组队主页（个人能量在 mainMember 里）
+            if (teamPriority.getValue()) {
+                if (updateUserConfiginTeam(true)) {
+                    prioritySwitchedToTeam = true;
+                    Status.flagToday(FLAG_TEAM_MODE_SWITCHED);
+                    Log.record("组队优先：已切换到组队模式");
+                } else {
+                    // 账号不在任何队伍 / 切换失败：降级为个人模式（原行为）
+                    Log.record("组队优先：切换到组队模式失败（可能不在任何队伍），按个人模式继续");
+                }
+            }
 
             if (waterFriendEnergyFirst.getValue()) {
                 waterFriendEnergy();
@@ -737,6 +755,12 @@ public class AntForestV2 extends ModelTask {
                     // 医疗健康 电子小票 4g*10能量
                     queryForestEnergy("BILL");
                 }
+
+                // 无纸阅读: 读免费书攒绿色能量
+                if (readForest.getValue()) {
+                    ReadForestTask.execute();
+                }
+
                 if (dress.getValue()) {
                     dress();
                 }
@@ -784,6 +808,15 @@ public class AntForestV2 extends ModelTask {
             syncTodayCollectedFromServer();
             Statistics.save();
             FriendWatch.save();
+            // 组队优先：本轮结束切回个人模式（放在倍卡/校准之后，避免它们落到个人版）
+            if (prioritySwitchedToTeam) {
+                if (updateUserConfiginTeam(false)) {
+                    Status.clearFlag(FLAG_TEAM_MODE_SWITCHED);
+                    Log.record("组队优先：已切回个人模式");
+                } else {
+                    Log.record("组队优先：切回个人模式失败，下次运行自动重试");
+                }
+            }
         }
     }
 
@@ -2458,7 +2491,15 @@ public class AntForestV2 extends ModelTask {
                 if (count == null || count < 0) {
                     continue;
                 }
-                while (Status.canVitalityExchangeBenefitToday(skuId, count) && exchangeBenefit(skuId)) {
+                // 失效 skuId（权益下架/换号/服务端改 ID）当日已判过就跳过，避免每轮刷屏并拖累后续任务
+                if (Status.hasFlagToday("forest::exchangeSkuMissing::" + skuId)) {
+                    continue;
+                }
+                // 每日次数之外再加硬循环上限：即便出现意外也不会空转
+                int loopCount = 0;
+                while (loopCount++ < count
+                        && Status.canVitalityExchangeBenefitToday(skuId, count)
+                        && exchangeBenefit(skuId)) {
                     TimeUtil.sleep(3000);
                 }
             }
@@ -5006,6 +5047,12 @@ public class AntForestV2 extends ModelTask {
     /** 单分类翻页上限：hasMore 异常一直为真时兜底 */
     private static final int VITALITY_ITEM_MAX_PAGES = 10;
 
+    /** 活力值商店列表拉取失败的当日重试上限：服务端持续失败时避免每轮都重拉（单轮最多 5 分类 × 10 页） */
+    private static final int VITALITY_SKU_RETRY_MAX = 3;
+
+    /** 活力值商店列表拉取失败次数的当日计数 key */
+    private static final String FLAG_VITALITY_SKU_RETRY = "forest::vitalitySkuListRetry";
+
     /**
      * 获取活力值商店所有商品信息。
      * <p>原先只查 SC_ASSETS 的第一页 ⇒ 权益列表只有一小部分；改为按官方实测的 5 个 labelType
@@ -5013,11 +5060,16 @@ public class AntForestV2 extends ModelTask {
      * <p>当日标记的判断放在方法内部，因为除了 vitalityExchangeBenefit() 外，
      * useEnergyRainCard()/兑换道具等路径也会直接调用它，那些路径同样需要"当日只拉一次"。
      */
-    /** @return 是否真的取到 SKU（取不到时留给下一轮重试） */
+    /** @return 是否真的取到 SKU（取不到时留给下一轮重试，但当日重试次数有上限） */
     private boolean getAllSkuInfo() {
         try {
             if (Status.hasFlagToday("forest::vitalitySkuList")) {
                 return true;
+            }
+            // 失败重试上限：服务端持续失败时避免每轮都重拉（单轮最多 5 分类 × 10 页）
+            int retries = Status.getIntFlagToday(FLAG_VITALITY_SKU_RETRY);
+            if (retries >= VITALITY_SKU_RETRY_MAX) {
+                return false;
             }
             int got = 0;
             for (String labelType : VITALITY_LABEL_TYPES) {
@@ -5047,11 +5099,23 @@ public class AntForestV2 extends ModelTask {
             if (got > 0) {
                 // 拉到了才打当日标记；拉不到留给下一轮重试
                 Status.flagToday("forest::vitalitySkuList");
+                return true;
             }
-            return got > 0;
+            accountVitalitySkuRetry();
+            return false;
         } catch (Throwable th) {
             Log.err(TAG, "getAllSkuInfo err:", th);
+            accountVitalitySkuRetry();
             return false;
+        }
+    }
+
+    /** 活力值商店列表拉取失败计数：达上限后当日不再重拉，避免每轮都重试 */
+    private static void accountVitalitySkuRetry() {
+        int tries = Status.getIntFlagToday(FLAG_VITALITY_SKU_RETRY) + 1;
+        Status.setIntFlagToday(FLAG_VITALITY_SKU_RETRY, tries);
+        if (tries >= VITALITY_SKU_RETRY_MAX) {
+            Log.i("活力值商店列表：连续" + tries + "次未取到，今日不再重试");
         }
     }
 
@@ -5122,7 +5186,12 @@ public class AntForestV2 extends ModelTask {
         }
         JSONObject sku = skuInfo.get(skuId);
         if (sku == null) {
-            Log.record("活力兑换🎐找不到要兑换的权益！");
+            // 失效 skuId（权益下架/换号/服务端改 ID）：打当日标记，当天不再重试；
+            // 否则每轮都会遍历到它并刷一条日志，既刷屏又拖累后续任务
+            if (!Status.hasFlagToday("forest::exchangeSkuMissing::" + skuId)) {
+                Log.record("活力兑换🎐找不到要兑换的权益！" + skuId + "#今日不再尝试");
+                Status.flagToday("forest::exchangeSkuMissing::" + skuId);
+            }
             return false;
         }
         try {
@@ -5300,8 +5369,9 @@ public class AntForestV2 extends ModelTask {
         } catch (Throwable t) {
             Log.err(TAG, "teamCooperateWater err:", t);
         } finally {
-            // 任何分支（含异常和提前 return）都要切回个人模式，否则会一直停在组队模式影响其它功能
-            if (switchedToTeam) {
+            // 任何分支（含异常和提前 return）都要切回个人模式，否则会一直停在组队模式影响其它功能。
+            // 组队优先时由 run() 收尾统一切回，这里不切（否则会把本轮后续活动打回个人版）
+            if (switchedToTeam && !teamPriority.getValue()) {
                 if (updateUserConfiginTeam(false)) {
                     Status.clearFlag(FLAG_TEAM_MODE_SWITCHED);
                     Log.record("已返回个人模式");
@@ -5353,7 +5423,11 @@ public class AntForestV2 extends ModelTask {
      * <p>
      * 没开「组队合种浇水」也会执行：正是"开了功能 → 切换中途中断 → 用户随后把开关关掉"这种情况最需要校正。
      */
-    private static void fixTeamModeIfNeeded() {
+    private void fixTeamModeIfNeeded() {
+        // 组队优先时组队是预期状态，不做"切回个人"的校正（否则刚切过去又被切回来）
+        if (teamPriority.getValue()) {
+            return;
+        }
         if (!Status.hasFlagToday(FLAG_TEAM_MODE_SWITCHED)) {
             return;
         }
